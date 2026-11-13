@@ -27,6 +27,11 @@ notes carefully below to understand what to do during upgrade.
   traffic until the Service exists and, if selector-less, has backends. If you
   have rules like this, ensure the referenced Services exist and have backends
   before upgrading.
+* The Cilium agent now fails to start if the kernel lacks BTF
+  (``CONFIG_DEBUG_INFO_BTF=y``), which is listed in the
+  :ref:`kernel requirements <admin_kernel_version>`. Previously, the agent could
+  start on such kernels but failed to load some BPF programs. Ensure all nodes
+  run a kernel with BTF before upgrading.
 
 Informational Notes
 ~~~~~~~~~~~~~~~~~~~
