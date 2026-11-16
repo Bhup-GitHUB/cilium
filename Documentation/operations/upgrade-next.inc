@@ -27,6 +27,9 @@ notes carefully below to understand what to do during upgrade.
   traffic until the Service exists and, if selector-less, has backends. If you
   have rules like this, ensure the referenced Services exist and have backends
   before upgrading.
+* Cilium doesn't emit packet traces from native devices anymore, to reduce the
+  CPU consumption. If you need these traces, you can restore them with the
+  ``--trace-netdev`` flag or the ``netdevTracing`` Helm value.
 
 Informational Notes
 ~~~~~~~~~~~~~~~~~~~
@@ -81,6 +84,11 @@ The following options have been introduced in this version of Cilium:
   value ``ipam.operator.excessIPReleaseDelay``) now also applies to Alibaba
   Cloud when release is enabled with ``--ipam-release-excess-ips``;
   ``--alibaba-cloud-release-excess-ips`` keeps releasing without a delay.
+* The ``--trace-netdev`` flag (Helm value ``netdevTracing``) enables packet
+  traces from the native device. In previous versions, these packet traces were
+  emitted when attached to the native devices. Cilium now attaches to native
+  devices by default and these traces had a high impact on CPU consumption in
+  some cases, so are now disabled by default.
 
 Changed Options
 ###############
