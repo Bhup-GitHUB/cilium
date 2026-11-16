@@ -406,6 +406,9 @@ const (
 	// EnableSocketLBTracing is the name for the option to enable the socket LB tracing
 	EnableSocketLBTracing = "trace-sock"
 
+	// EnableNetdevTracing is the name for the option to enable tracing in bpf_host attached to native devices
+	EnableNetdevTracing = "trace-netdev"
+
 	// BPFSocketLBHostnsOnly is the name of the BPFSocketLBHostnsOnly option
 	BPFSocketLBHostnsOnly = "bpf-lb-sock-hostns-only"
 
@@ -1136,6 +1139,7 @@ func (c *HiveConfig) Populate(vp *viper.Viper) {
 // It is safe to use it ONLY after waiting on DaemonConfig promise.
 type UnsafeDaemonConfig struct {
 	EnableSocketLBTracing bool
+	EnableNetdevTracing   bool
 	EnableSocketLBPeer    bool
 	// EnableHealthDatapath enables IPIP health probes data path
 	EnableHealthDatapath bool
@@ -2355,6 +2359,7 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.MasqueradeInterfaces = vp.GetStringSlice(MasqueradeInterfaces)
 	c.UnsafeDaemonConfigOption.BPFSocketLBHostnsOnly = vp.GetBool(BPFSocketLBHostnsOnly)
 	c.UnsafeDaemonConfigOption.EnableSocketLBTracing = vp.GetBool(EnableSocketLBTracing)
+	c.UnsafeDaemonConfigOption.EnableNetdevTracing = vp.GetBool(EnableNetdevTracing)
 	c.UnsafeDaemonConfigOption.EnableSocketLBPodConnectionTermination = vp.GetBool(EnableSocketLBPodConnectionTermination)
 	c.EnableBPFTProxy = vp.GetBool(EnableBPFTProxy)
 	c.EnableAutoDirectRouting = vp.GetBool(EnableAutoDirectRoutingName)
