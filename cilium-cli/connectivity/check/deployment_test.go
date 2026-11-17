@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
+// This file was not reviewed by a human before submission
+
 package check
 
 import (
@@ -14,7 +16,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
+	"github.com/cilium/cilium/cilium-cli/defaults"
 	"github.com/cilium/cilium/cilium-cli/k8s"
 	"github.com/cilium/cilium/cilium-cli/utils/features"
 	"github.com/cilium/cilium/pkg/annotation"
@@ -144,4 +148,62 @@ func TestDeployCCNPTestEnvCreatesNamespacesAndDeployments(t *testing.T) {
 		assert.Equal(t, ccnpDeploymentName, deployment.Name)
 		assert.Equal(t, kindCCNPName, deployment.Labels["kind"])
 	}
+}
+
+func ciliumAgentPod(name string, terminating bool) *corev1.Pod {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: "kube-system",
+			Labels:    map[string]string{"k8s-app": "cilium"},
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	if terminating {
+		pod.DeletionTimestamp = &metav1.Time{}
+	}
+	return pod
+}
+
+func newFakeCiliumPodsTest(t *testing.T, src, dst *k8s.Client) *ConnectivityTest {
+	t.Helper()
+	ct, _ := newFakeConnectivityTest(t)
+	ct.params.CiliumNamespace = "kube-system"
+	ct.params.AgentPodSelector = defaults.AgentPodSelector
+	ct.clients = &deploymentClients{src: src, dst: dst}
+	ct.ciliumPods = make(map[string]Pod)
+	return ct
+}
+
+func TestInitCiliumPodsSkipsTerminating(t *testing.T) {
+	client := &k8s.Client{Clientset: fake.NewSimpleClientset(
+		ciliumAgentPod("cilium-running", false),
+		ciliumAgentPod("cilium-terminating", true),
+	)}
+	ct := newFakeCiliumPodsTest(t, client, client)
+
+	require.NoError(t, ct.initCiliumPods(context.Background()))
+	require.Len(t, ct.ciliumPods, 1)
+	assert.Contains(t, ct.ciliumPods, "cilium-running")
+
+	list := client.Clientset.(*fake.Clientset).Actions()[0].(k8stesting.ListAction)
+	assert.Equal(t, "status.phase=Running", list.GetListRestrictions().Fields.String())
+}
+
+func TestInitCiliumPodsErrorsWithoutUsablePods(t *testing.T) {
+	client := &k8s.Client{Clientset: fake.NewSimpleClientset(
+		ciliumAgentPod("cilium-terminating-1", true),
+		ciliumAgentPod("cilium-terminating-2", true),
+	)}
+	ct := newFakeCiliumPodsTest(t, client, client)
+
+	require.ErrorIs(t, ct.initCiliumPods(context.Background()), errNoCiliumPods)
+}
+
+func TestInitCiliumPodsErrorsWhenOneClusterHasNoUsablePods(t *testing.T) {
+	src := &k8s.Client{Clientset: fake.NewSimpleClientset(ciliumAgentPod("cilium-src-running", false))}
+	dst := &k8s.Client{Clientset: fake.NewSimpleClientset(ciliumAgentPod("cilium-dst-terminating", true))}
+	ct := newFakeCiliumPodsTest(t, src, dst)
+
+	require.ErrorIs(t, ct.initCiliumPods(context.Background()), errNoCiliumPods)
 }
