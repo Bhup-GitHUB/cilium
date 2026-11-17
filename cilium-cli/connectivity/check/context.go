@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
+// This file was not reviewed by a human before submission
+
 package check
 
 import (
@@ -21,6 +23,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 
 	"github.com/cilium/cilium/api/v1/observer"
 	"github.com/cilium/cilium/cilium-cli/connectivity/perf/common"
@@ -995,19 +998,28 @@ var errNoCiliumPods = errors.New("no cilium agent pods found")
 // initCiliumPods fetches the Cilium agent pod information from all clients
 func (ct *ConnectivityTest) initCiliumPods(ctx context.Context) error {
 	for _, client := range ct.clients.clients() {
-		ciliumPods, err := client.ListPods(ctx, ct.params.CiliumNamespace, metav1.ListOptions{LabelSelector: ct.params.AgentPodSelector})
+		ciliumPods, err := client.ListPods(ctx, ct.params.CiliumNamespace, metav1.ListOptions{
+			LabelSelector: ct.params.AgentPodSelector,
+			FieldSelector: fields.OneTermEqualSelector("status.phase", string(corev1.PodRunning)).String(),
+		})
 		if err != nil {
 			return fmt.Errorf("unable to list Cilium pods: %w", err)
 		}
-		if len(ciliumPods.Items) == 0 {
-			return fmt.Errorf("%w in -n %s -l %s", errNoCiliumPods, ct.params.CiliumNamespace, ct.params.AgentPodSelector)
-		}
+		found := 0
 		for _, ciliumPod := range ciliumPods.Items {
+			if ciliumPod.DeletionTimestamp != nil {
+				ct.Warnf("Skipping Cilium pod %s: terminating", ciliumPod.Name)
+				continue
+			}
 			// TODO: Can Cilium pod names collide across clusters?
 			ct.ciliumPods[ciliumPod.Name] = Pod{
 				K8sClient: client,
 				Pod:       ciliumPod.DeepCopy(),
 			}
+			found++
+		}
+		if found == 0 {
+			return fmt.Errorf("%w running in cluster %q in -n %s -l %s", errNoCiliumPods, client.ClusterName(), ct.params.CiliumNamespace, ct.params.AgentPodSelector)
 		}
 	}
 
